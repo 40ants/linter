@@ -57,8 +57,13 @@
                           (uiop:compile-file-error #'handle-compile-file-error)
                           #+sbcl
                           (sb-int:package-at-variance #'ignore-and-continue))
-             (sblint/utilities/streams::with-muffled-streams
-               (asdf:load-system system :force t)))
+             
+             (flet ((from-the-same-primary-system-p (component)
+                      "This predicate makes ASDF correctly reload all package-inferred subsystems."
+                      (string-equal (asdf:primary-system-name component)
+                                    (asdf:primary-system-name system))))
+               (sblint/utilities/streams::with-muffled-streams
+                 (asdf:load-system system :force #'from-the-same-primary-system-p))))
            (sblint/utilities/logger::do-log :info "Done"))
          stream
          *error-output*
