@@ -1,6 +1,7 @@
 (defpackage #:40ants-linter/main
   (:use #:cl)
   (:import-from #:str)
+  (:import-from #:cl-ppcre)
   (:import-from #:defmain
                 #:defmain)
   (:import-from #:sblint/utilities/quicklisp)
@@ -12,13 +13,22 @@
 (in-package 40ants-linter/main)
 
 
+(defun should-be-ignored (condition)
+  ;; DEFUN redefinitions occur when DEFUN form in enclosed into EVAL-WHEN form
+  ;; DEFMACRO seems issues warning every time. Probably because after redifinition
+  ;; you need to recompile all places where this macro was used:
+  (cl-ppcre:all-matches "^redefining .* in (DEFUN|DEFMACRO)$"
+                        (princ-to-string condition)))
+
+
 (defun run-lint-system (system-name &optional (stream *standard-output*))
   (let* ((system (asdf:find-system system-name))
          ;; Here we'll count errors.
          ;; We need it because run-lit-fn may signal error
          ;; and without error-map we'll never know how many
          ;; errors were there.
-         (error-map (sblint/run-lint::make-error-map)))
+         (error-map (sblint/run-lint::make-error-map))
+         (num-ignored 0))
 
     #+quicklisp
     (sblint/utilities/quicklisp::install-required-systems system-name)
@@ -62,13 +72,32 @@
                       "This predicate makes ASDF correctly reload all package-inferred subsystems."
                       (string-equal (asdf:primary-system-name component)
                                     (asdf:primary-system-name system))))
-               (sblint/utilities/streams::with-muffled-streams
-                 (asdf:load-system system :force #'from-the-same-primary-system-p))))
+               (flet ((maybe-ignore-condition (condition)
+                        (let* ((*error-output* errout)
+                               (sb-int:*print-condition-references* nil))
+                          (multiple-value-bind (file position)
+                              (sblint/run-lint::get-location condition)
+                            (when (should-be-ignored condition)
+                              ;; Here we just register that we've seen this condition
+                              ;; and don't need to print a note for it again.
+                              ;; This will suppress output from SBLINT's handler
+                              (let ((key (list file position (princ-to-string condition))))
+                                (unless (gethash key error-map)
+                                  (setf (gethash key error-map) t)
+                                  (incf num-ignored))))))))
+                 (sblint/run-lint::call-with-handle-condition
+                  #'maybe-ignore-condition
+                  (lambda ()
+                    (sblint/utilities/streams::with-muffled-streams
+                      (asdf:load-system system :force #'from-the-same-primary-system-p)))))))
            (sblint/utilities/logger::do-log :info "Done"))
          stream
          *error-output*
          directory
-         error-map)))))
+         error-map)
+
+        (- (sblint/run-lint::num-errors error-map)
+           num-ignored)))))
 
 
 (defun quit-unless-interactive (code)
