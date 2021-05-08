@@ -135,8 +135,8 @@
             finally (quit-unless-interactive total-errors-count)))))
 
 
-(defmain main ((version "Show program version and exit."
-                        :flag t)
-               (system "ASDF system (or multiple systems, separated by comma)."))
+(defmain (main) ((version "Show program version and exit."
+                          :flag t)
+                 (system "ASDF system (or multiple systems, separated by comma)."))
   "Show information about Lisp implementation and given systems. Useful when collecting information for bugreports."
   (real-main version system))
