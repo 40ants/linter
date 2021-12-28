@@ -68,11 +68,23 @@
                           #+sbcl
                           (sb-int:package-at-variance #'ignore-and-continue))
              
-             (flet ((from-the-same-primary-system-p (component)
-                      "This predicate makes ASDF correctly reload all package-inferred subsystems."
-                      (string-equal (asdf:primary-system-name component)
-                                    (asdf:primary-system-name system))))
-               (flet ((maybe-ignore-condition (condition)
+             (let ((already-reloaded (make-hash-table :test 'equal)))
+               (flet ((from-the-same-primary-system-p (component)
+                        "This predicate makes ASDF correctly reload all package-inferred subsystems."
+                        (let ((should-be-reloaded-p
+                                (and (string-equal (asdf:primary-system-name component)
+                                                   (asdf:primary-system-name system))
+                                     (null (gethash component
+                                                    already-reloaded)))))
+                          (when should-be-reloaded-p
+                            (setf (gethash component
+                                           already-reloaded)
+                                  t)
+                            
+                            (sblint/utilities/logger::do-log :info
+                              "System \"~A\" will be reloaded." component))
+                          (values should-be-reloaded-p)))
+                      (maybe-ignore-condition (condition)
                         (let* ((*error-output* errout)
                                (sb-int:*print-condition-references* nil))
                           (multiple-value-bind (file position)
