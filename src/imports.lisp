@@ -1,5 +1,6 @@
 (uiop:define-package #:40ants-linter/imports
   (:use #:cl)
+  (:import-from #:named-readtables)
   (:import-from #:alexandria
                 #:curry
                 #:with-input-from-file)
@@ -104,16 +105,16 @@
 (defun read-forms (filename)
   (with-input-from-file (input filename)
     (loop with eof = '#:eof
-          with *package* = *package*
-          with *readtable* = *readtable*
+          with *package* = (uiop:ensure-package "IMPORTS-LINTER-WORKSPACE"
+                                                :use '("COMMON-LISP"))
+          with *readtable* = (copy-readtable nil)
           for form = (read-preserving-whitespace input nil eof)
           until (eq form eof)
           when (or (eql (car form)
                         'cl:in-package)
                    (eql (car form)
-                     'named-readtables:in-readtable))
+                        'named-readtables:in-readtable))
             do (eval form)
-               
           collect form)))
 
 
@@ -155,33 +156,44 @@
         (imported-packages package-def)
       (loop with used-imports = nil
             with missing-imports = nil
+            with external-symbols = (loop for s being the external-symbol of current-package
+                                          collect s)
+            with packages-of-exported-symbols = (loop for s in external-symbols
+                                                      collect (symbol-package s))
+
             ;; A map package -> list of symbols,
             ;; where "package" is one of items
             ;; from MISSING-IMPORTS list.
             with not-imported-symbols = (make-hash-table)
-            for symbol in (used-symbols all-forms)
+            with all-symbols = (used-symbols all-forms)
+            for symbol in all-symbols
             for package = (symbol-package symbol)
             do (let ((found-in-packages
-                       (or (and (member package imported)
-                                (list package))
-                           (search-in-packages symbol
-                                               imported))))
-                 (cond
-                   (found-in-packages
-                    (setf used-imports
-                          (union used-imports
-                                 found-in-packages)))
-                   ((and (not (eql package current-package))
-                         (not (should-be-ignored package)))
-                    (push symbol
-                          (gethash package not-imported-symbols))
-                    (pushnew (symbol-package symbol)
-                             missing-imports))))
+                         (or (and (member package imported)
+                                  (list package))
+                             (search-in-packages symbol
+                                                 imported))))
+                   (cond
+                     (found-in-packages
+                      (setf used-imports
+                            (union used-imports
+                                   found-in-packages)))
+                     ((and (not (eql package current-package))
+                           (not (should-be-ignored package)))
+                      (push symbol
+                            (gethash package not-imported-symbols))
+                      (pushnew (symbol-package symbol)
+                               missing-imports))))
             finally (return
                       (let ((unused-imports
-                              (nset-difference imported
-                                               (list* current-package
-                                                      used-imports)))
+                              (nset-difference
+                               (nset-difference imported
+                                                (list* current-package
+                                                       used-imports))
+                               ;; We don't want to warn about symbols
+                               ;; which were imported from some package
+                               ;; and exported from the current-package:
+                               packages-of-exported-symbols))
                             (missing-imports
                               (sort missing-imports
                                     #'string<
@@ -204,10 +216,11 @@
 
    Roadmap:
 
-   - Detect imported but unused symbols.
    - Warn on USE of packages with too large amount of external symbols.
    - Allow to turn off linter for some forms.
-   - Integrate with SBLINT and Emacs to highlight issues in the editor."
+   - Integrate with SBLINT and Emacs to highlight issues in the editor.
+
+   Returns integer with number of found problems or zero."
   (asdf:load-system system-name)
   
   (flet ((format-missing-import (not-imported-symbols package)
@@ -216,7 +229,8 @@
              (format nil "~A (~{~S~^, ~})"
                      (downcased-package-name package)
                      (gethash package not-imported-symbols)))))
-    (loop for filename in (system-files system-name)
+    (loop with num-problems = 0
+          for filename in (system-files system-name)
           for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports filename)
           when (or missing-imports
                    unused-imports)
@@ -227,7 +241,10 @@
                        (mapcar (curry #'format-missing-import
                                       not-imported-symbols)
                                missing-imports))
+               (incf num-problems (length missing-imports))
           when unused-imports
             do (format t "  Unused imports: ~{~A~^, ~}~%"
                        (mapcar #'downcased-package-name
-                               unused-imports)))))
+                               unused-imports))
+               (incf num-problems (length unused-imports))
+          finally (return num-problems))))
