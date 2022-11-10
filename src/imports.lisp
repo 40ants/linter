@@ -104,18 +104,21 @@
 
 (defun read-forms (filename)
   (with-input-from-file (input filename)
-    (loop with eof = '#:eof
-          with *package* = (uiop:ensure-package "IMPORTS-LINTER-WORKSPACE"
-                                                :use '("COMMON-LISP"))
-          with *readtable* = (copy-readtable nil)
-          for form = (read-preserving-whitespace input nil eof)
-          until (eq form eof)
-          when (or (eql (car form)
-                        'cl:in-package)
-                   (eql (car form)
-                        'named-readtables:in-readtable))
-            do (eval form)
-          collect form)))
+    (let* ((temp-package (uiop:ensure-package "IMPORTS-LINTER-WORKSPACE"
+                                              :use '("COMMON-LISP")))
+           (*package* temp-package))
+      (unwind-protect
+           (loop with eof = '#:eof
+                 with *readtable* = (copy-readtable nil)
+                 for form = (read-preserving-whitespace input nil eof)
+                 until (eq form eof)
+                 when (or (eql (car form)
+                               'cl:in-package)
+                          (eql (car form)
+                               'named-readtables:in-readtable))
+                   do (eval form)
+                 collect form)
+        (delete-package temp-package)))))
 
 
 (defparameter *packages-to-ignore*
