@@ -24,7 +24,12 @@
 
 
 (defun run-lint-system (system-name &optional (stream *standard-output*))
-  (let* ((system (asdf:find-system system-name))
+  (if (find-package :quicklisp)
+      (uiop:symbol-call :ql :quickload system-name
+                            :silent t)
+      (asdf:load-system system-name))
+  
+  (let* ((system (asdf:registered-system system-name))
          ;; Here we'll count errors.
          ;; We need it because run-lit-fn may signal error
          ;; and without error-map we'll never know how many
