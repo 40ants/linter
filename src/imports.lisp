@@ -46,6 +46,7 @@
 
 
 (defun imported-packages (form)
+  "Returns a package list of all packages mentioned in :use or :import-from sections of the FORM."
   (loop with result = nil
         for (option-name . option-value) in (cddr form)
         when (eql option-name
@@ -151,7 +152,7 @@
           collect package))
 
 
-(defun analyze-file-imports (filename)
+(defun analyze-file-imports (checked-system-name filename system-dependencies)
   (let* ((all-forms (read-forms filename))
          (package-def (find-if #'package-definition-p
                                all-forms)))
@@ -171,36 +172,86 @@
             with all-symbols = (used-symbols all-forms)
             for symbol in all-symbols
             for package = (symbol-package symbol)
+            for primary-system-name = (asdf:primary-system-name (package-name package))
+            unless (string-equal (package-name package)
+                                 primary-system-name)
+              ;; We'll use this list to ensure, that all primary
+              ;; systems are included into dependencies, because otherwise
+              ;; there will be problems when downloading the checked
+              ;; system from official Quicklisp distribution. Official
+              ;; distribution does not include secondary ASDF systems
+              ;; and you whould explicitly depend on primary one.
+              collect primary-system-name into primary-system-names
             do (let ((found-in-packages
-                         (or (and (member package imported)
-                                  (list package))
-                             (search-in-packages symbol
-                                                 imported))))
-                   (cond
-                     (found-in-packages
-                      (setf used-imports
-                            (union used-imports
-                                   found-in-packages)))
-                     ((and (not (eql package current-package))
-                           (not (should-be-ignored package)))
-                      (push symbol
-                            (gethash package not-imported-symbols))
-                      (pushnew (symbol-package symbol)
-                               missing-imports))))
+                       (if (member package imported)
+                           (list package)
+                           (search-in-packages symbol
+                                               imported))))
+                 (cond
+                   (found-in-packages
+                    (setf used-imports
+                          (union used-imports
+                                 found-in-packages)))
+                   ((and (not (eql package current-package))
+                         (not (should-be-ignored package)))
+                    (push symbol
+                          (gethash package not-imported-symbols))
+                    (pushnew (symbol-package symbol)
+                             missing-imports))))
             finally (return
-                      (let ((unused-imports
-                              (nset-difference
-                               (nset-difference imported
-                                                (list* current-package
-                                                       used-imports))
-                               ;; We don't want to warn about symbols
-                               ;; which were imported from some package
-                               ;; and exported from the current-package:
-                               packages-of-exported-symbols))
-                            (missing-imports
-                              (sort missing-imports
-                                    #'string<
-                                    :key #'package-name)))
+                      (let* ((missing-primary-systems
+                               (loop with results = nil
+                                     for name in primary-system-names
+                                     unless (or
+                                             ;; We consider UIOP is always available, becase it is
+                                             ;; a part of ASDF:
+                                             (string-equal name "uiop")
+                                             (string-equal name "asdf")
+                                             ;; We don't want to warn about systems
+                                             ;; which already dependencies at ASD file level:
+                                             (member name system-dependencies
+                                                     :test #'string-equal)
+                                             ;; Also, we don't need to warn if system is there
+                                             ;; is already :import-from for this system
+                                             (member name imported
+                                                     :test #'string-equal
+                                                     :key #'package-name)
+                                             ;; We don't want to warn about currently checked system:
+                                             (string-equal name
+                                                           checked-system-name))
+                                       do (pushnew
+                                           (or (asdf:registered-system name)
+                                               (asdf:registered-system (string-downcase name))
+                                               name)
+                                           results
+                                           :test #'equal)
+                                     finally (return results)))
+                             (missing-imports (append
+                                               missing-primary-systems
+                                               missing-imports))
+                             (missing-imports
+                               (sort missing-imports
+                                     #'string<
+                                     :key (lambda (item)
+                                            (etypecase item
+                                              (package (package-name item))
+                                              (asdf:system (asdf:component-name item))))))
+                             (unused-imports
+                               (nset-difference
+                                (nset-difference
+                                 (nset-difference imported
+                                                  (list* current-package
+                                                         used-imports))
+                                 ;; We don't want to warn about symbols
+                                 ;; which were imported from some package
+                                 ;; and exported from the current-package:
+                                 packages-of-exported-symbols)
+                                primary-system-names
+                                :test #'string-equal
+                                :key (lambda (item)
+                                       (etypecase item
+                                         (string item)
+                                         (package (package-name item)))))))
                         (list missing-imports
                               unused-imports
                               not-imported-symbols)))))))
@@ -226,15 +277,27 @@
    Returns integer with number of found problems or zero."
   (asdf:load-system system-name)
   
-  (flet ((format-missing-import (not-imported-symbols package)
+  (flet ((format-missing-import (not-imported-symbols package-or-system)
            (let ((*package* (find-package "KEYWORD"))
-                 (*print-case* :downcase))
-             (format nil "~A (~{~S~^, ~})"
-                     (downcased-package-name package)
-                     (gethash package not-imported-symbols)))))
-    (loop with num-problems = 0
+                 (*print-case* :downcase)
+                 (symbols (gethash package-or-system not-imported-symbols))
+                 (name (etypecase package-or-system
+                         (package (downcased-package-name package-or-system))
+                         (asdf:system (asdf:component-name package-or-system)))))
+             
+             (if symbols
+                 (format nil "~A (~{~S~^, ~})"
+                         name
+                         symbols)
+                 (format nil "~A (for proper loading from Quicklisp)"
+                         name)))))
+    (loop with system = (asdf:registered-system system-name)
+          with system-dependencies = (asdf:system-depends-on system)
+          with num-problems = 0
           for filename in (system-files system-name)
-          for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports filename)
+          for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports system-name
+                                                                                            filename
+                                                                                            system-dependencies)
           when (or missing-imports
                    unused-imports)
             do (format t "~2&~A:~%"
