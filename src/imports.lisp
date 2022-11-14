@@ -216,9 +216,13 @@
                                              (member name imported
                                                      :test #'string-equal
                                                      :key #'package-name)
-                                             ;; We don't want to warn about currently checked system:
+                                             ;; We don't want to warn about currently checked system.
+                                             ;; Here we are comparing name with primary-system-name
+                                             ;; of the checked system, because they both could
+                                             ;; be from the same primary system and in this case,
+                                             ;; name is already downloaded and available for compilation
                                              (string-equal name
-                                                           checked-system-name))
+                                                           (asdf:primary-system-name checked-system-name)))
                                        do (pushnew
                                            (or (asdf:registered-system name)
                                                (asdf:registered-system (string-downcase name))
