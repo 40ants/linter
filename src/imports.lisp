@@ -152,6 +152,20 @@
           collect package))
 
 
+(defun package-of-some-known-non-package-inferred-system-p (package)
+  (let ((name (package-name package)))
+    (and
+     (not
+      ;; When there is no real ASDF system behind the package
+      (asdf:registered-system name))
+     ;; but it was registered using asdf:register-system-packages function
+     (asdf/package-inferred-system::package-name-system name)
+     ;; then we'll require user to import exactly this name instead of
+     ;; it's real system name. This way when checked system uses SWANK/BACKEND,
+     ;; we'll require it to import-from SWANK/BACKEND instead of SWANK.
+     t)))
+
+
 (defun analyze-file-imports (checked-system-name filename system-dependencies)
   (let* ((all-forms (read-forms filename))
          (package-def (find-if #'package-definition-p
@@ -172,9 +186,8 @@
             with all-symbols = (used-symbols all-forms)
             for symbol in all-symbols
             for package = (symbol-package symbol)
-            for primary-system-name = (asdf:primary-system-name (package-name package))
-            unless (string-equal (package-name package)
-                                 primary-system-name)
+            for primary-system-name = (asdf/package-inferred-system::package-name-system (package-name package))
+            unless (package-of-some-known-non-package-inferred-system-p package)
               ;; We'll use this list to ensure, that all primary
               ;; systems are included into dependencies, because otherwise
               ;; there will be problems when downloading the checked
