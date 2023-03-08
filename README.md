@@ -39,7 +39,7 @@ You can install this library from Quicklisp, but you want to receive updates qui
 Then use Roswell to build a command line tool:
 
 ```
-ros install 40ants-linter
+ros install 40ants-asdf-system 40ants-linter
 ```
 <a id="x-2840ANTS-LINTER-DOCS-2FINDEX-3A-3A-40USAGE-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
 
