@@ -320,7 +320,7 @@
                         (not allow-unused-imports)))
           do (format t "~2&~A:~%"
                      filename)
-             (incf error-count
+             (incf num-problems
                    (+ (length missing-imports)
                        (if allow-unused-imports
                            0

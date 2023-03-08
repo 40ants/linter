@@ -125,10 +125,7 @@
          (bound (when symbol
                   (boundp symbol))))
     (unless bound
-      (format t "EXITING with code: ~A~%"
-              code)
-      ;; (uiop:quit code)
-      )))
+      (uiop:quit code))))
 
 
 (defun real-main (version system &key check-imports)
