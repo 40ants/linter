@@ -42,12 +42,15 @@
                                    "TODO"
                                    "Unlicense"
                                    "REPL"
-                                   "GIT"))
+                                   "GIT")
+                    :external-docs ("https://40ants.com/ci/"))
   (40ants-linter system)
   "
 [![](https://github-actions.40ants.com/40ants/linter/matrix.svg?only=ci.run-tests)](https://github.com/40ants/linter/actions)
 
 ![Quicklisp](http://quickdocs.org/badge/40ants-linter.svg)
+
+This system is a command line wrapper around [SBLint](https://github.com/cxxxr/sblint). Additionally, it provides a way to validate imports of a package-inferred ASDF systems to find missing or unnecessary imports.
 "
   (@installation section)
   (@usage section))
@@ -63,7 +66,12 @@ You can install this library from Quicklisp, but you want to receive updates qui
 ```
 (ql-dist:install-dist "http://dist.ultralisp.org/"
                       :prompt nil)
-(ql:quickload :40ants-linter)
+```
+
+Then use Roswell to build a command line tool:
+
+```
+ros install 40ants-linter
 ```
 """)
 
@@ -73,5 +81,17 @@ You can install this library from Quicklisp, but you want to receive updates qui
                                    "ASDF"
                                    "40A"))
   "
-TODO: Write a library description. Put some examples here.
+Run linter from a command line like this:
+
+```
+40ants-linter -s cl-telegram-bot
+```
+
+To validate imports, add `--imports` key:
+
+```
+40ants-linter --imports -s cl-telegram-bot
+```
+
+Utility's exit code contains a number of found problems. Thus when it exits with code 0, run is considered successful. You can use this to build a continuous integration pipeline. 40ANTS-CI system already includes support for this linter and is able to generate proper config for GitHub actions.
 ")
