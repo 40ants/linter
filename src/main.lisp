@@ -118,7 +118,10 @@
          (bound (when symbol
                   (boundp symbol))))
     (unless bound
-      (uiop:quit code))))
+      (format t "EXITING with code: ~A~%"
+              code)
+      ;; (uiop:quit code)
+      )))
 
 
 (defun real-main (version system)

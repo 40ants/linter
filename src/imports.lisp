@@ -196,7 +196,7 @@
    (package-name package)))
 
 
-(defun analyze-imports (system-name)
+(defun analyze-imports (system-name &key (allow-unused-imports nil))
   "Prints report about issues of IMPORT-FROM
    clauses in a given package-inferred ASDF system.
 
@@ -204,7 +204,6 @@
 
    Roadmap:
 
-   - Detect imported but unused symbols.
    - Warn on USE of packages with too large amount of external symbols.
    - Allow to turn off linter for some forms.
    - Integrate with SBLINT and Emacs to highlight issues in the editor."
@@ -216,18 +215,27 @@
              (format nil "~A (~{~S~^, ~})"
                      (downcased-package-name package)
                      (gethash package not-imported-symbols)))))
-    (loop for filename in (system-files system-name)
+    (loop with error-count = 0
+          for filename in (system-files system-name)
           for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports filename)
           when (or missing-imports
-                   unused-imports)
-            do (format t "~2&~A:~%"
-                       filename)
+                   (and unused-imports
+                        (not allow-unused-imports)))
+          do (format t "~2&~A:~%"
+                     filename)
+             (incf error-count
+                   (+ (length missing-imports)
+                       (if allow-unused-imports
+                           0
+                           (length unused-imports))))
           when missing-imports
-            do (format t "  Missing imports: ~{~A~^, ~}~%"
-                       (mapcar (curry #'format-missing-import
-                                      not-imported-symbols)
-                               missing-imports))
-          when unused-imports
-            do (format t "  Unused imports: ~{~A~^, ~}~%"
-                       (mapcar #'downcased-package-name
-                               unused-imports)))))
+          do (format t "  Missing imports: ~{~A~^, ~}~%"
+                     (mapcar (curry #'format-missing-import
+                                    not-imported-symbols)
+                             missing-imports))
+          when (and unused-imports
+                    (not allow-unused-imports))
+          do (format t "  Unused imports: ~{~A~^, ~}~%"
+                     (mapcar #'downcased-package-name
+                             unused-imports))
+          finally (return error-count))))
