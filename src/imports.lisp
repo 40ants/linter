@@ -1,5 +1,6 @@
 (uiop:define-package #:40ants-linter/imports
   (:use #:cl)
+  (:import-from #:named-readtables)
   (:import-from #:alexandria
                 #:curry
                 #:with-input-from-file)
@@ -45,6 +46,7 @@
 
 
 (defun imported-packages (form)
+  "Returns a package list of all packages mentioned in :use or :import-from sections of the FORM."
   (loop with result = nil
         for (option-name . option-value) in (cddr form)
         when (eql option-name
@@ -103,18 +105,21 @@
 
 (defun read-forms (filename)
   (with-input-from-file (input filename)
-    (loop with eof = '#:eof
-          with *package* = *package*
-          with *readtable* = *readtable*
-          for form = (read-preserving-whitespace input nil eof)
-          until (eq form eof)
-          when (or (eql (car form)
-                        'cl:in-package)
-                   (eql (car form)
-                     'named-readtables:in-readtable))
-            do (eval form)
-               
-          collect form)))
+    (let* ((temp-package (uiop:ensure-package "IMPORTS-LINTER-WORKSPACE"
+                                              :use '("COMMON-LISP")))
+           (*package* temp-package))
+      (unwind-protect
+           (loop with eof = '#:eof
+                 with *readtable* = (copy-readtable nil)
+                 for form = (read-preserving-whitespace input nil eof)
+                 until (eq form eof)
+                 when (or (eql (car form)
+                               'cl:in-package)
+                          (eql (car form)
+                               'named-readtables:in-readtable))
+                   do (eval form)
+                 collect form)
+        (delete-package temp-package)))))
 
 
 (defparameter *packages-to-ignore*
@@ -147,7 +152,21 @@
           collect package))
 
 
-(defun analyze-file-imports (filename)
+(defun package-of-some-known-non-package-inferred-system-p (package)
+  (let ((name (package-name package)))
+    (and
+     (not
+      ;; When there is no real ASDF system behind the package
+      (asdf:registered-system name))
+     ;; but it was registered using asdf:register-system-packages function
+     (asdf/package-inferred-system::package-name-system name)
+     ;; then we'll require user to import exactly this name instead of
+     ;; it's real system name. This way when checked system uses SWANK/BACKEND,
+     ;; we'll require it to import-from SWANK/BACKEND instead of SWANK.
+     t)))
+
+
+(defun analyze-file-imports (checked-system-name filename system-dependencies)
   (let* ((all-forms (read-forms filename))
          (package-def (find-if #'package-definition-p
                                all-forms)))
@@ -155,15 +174,30 @@
         (imported-packages package-def)
       (loop with used-imports = nil
             with missing-imports = nil
+            with external-symbols = (loop for s being the external-symbol of current-package
+                                          collect s)
+            with packages-of-exported-symbols = (loop for s in external-symbols
+                                                      collect (symbol-package s))
+
             ;; A map package -> list of symbols,
             ;; where "package" is one of items
             ;; from MISSING-IMPORTS list.
             with not-imported-symbols = (make-hash-table)
-            for symbol in (used-symbols all-forms)
+            with all-symbols = (used-symbols all-forms)
+            for symbol in all-symbols
             for package = (symbol-package symbol)
+            for primary-system-name = (asdf/package-inferred-system::package-name-system (package-name package))
+            unless (package-of-some-known-non-package-inferred-system-p package)
+              ;; We'll use this list to ensure, that all primary
+              ;; systems are included into dependencies, because otherwise
+              ;; there will be problems when downloading the checked
+              ;; system from official Quicklisp distribution. Official
+              ;; distribution does not include secondary ASDF systems
+              ;; and you whould explicitly depend on primary one.
+              collect primary-system-name into primary-system-names
             do (let ((found-in-packages
-                       (or (and (member package imported)
-                                (list package))
+                       (if (member package imported)
+                           (list package)
                            (search-in-packages symbol
                                                imported))))
                  (cond
@@ -178,14 +212,63 @@
                     (pushnew (symbol-package symbol)
                              missing-imports))))
             finally (return
-                      (let ((unused-imports
-                              (nset-difference imported
-                                               (list* current-package
-                                                      used-imports)))
-                            (missing-imports
-                              (sort missing-imports
-                                    #'string<
-                                    :key #'package-name)))
+                      (let* ((missing-primary-systems
+                               (loop with results = nil
+                                     for name in primary-system-names
+                                     unless (or
+                                             ;; We consider UIOP is always available, becase it is
+                                             ;; a part of ASDF:
+                                             (string-equal name "uiop")
+                                             (string-equal name "asdf")
+                                             ;; We don't want to warn about systems
+                                             ;; which already dependencies at ASD file level:
+                                             (member name system-dependencies
+                                                     :test #'string-equal)
+                                             ;; Also, we don't need to warn if system is there
+                                             ;; is already :import-from for this system
+                                             (member name imported
+                                                     :test #'string-equal
+                                                     :key #'package-name)
+                                             ;; We don't want to warn about currently checked system.
+                                             ;; Here we are comparing name with primary-system-name
+                                             ;; of the checked system, because they both could
+                                             ;; be from the same primary system and in this case,
+                                             ;; name is already downloaded and available for compilation
+                                             (string-equal name
+                                                           (asdf:primary-system-name checked-system-name)))
+                                       do (pushnew
+                                           (or (asdf:registered-system name)
+                                               (asdf:registered-system (string-downcase name))
+                                               name)
+                                           results
+                                           :test #'equal)
+                                     finally (return results)))
+                             (missing-imports (append
+                                               missing-primary-systems
+                                               missing-imports))
+                             (missing-imports
+                               (sort missing-imports
+                                     #'string<
+                                     :key (lambda (item)
+                                            (etypecase item
+                                              (package (package-name item))
+                                              (asdf:system (asdf:component-name item))))))
+                             (unused-imports
+                               (nset-difference
+                                (nset-difference
+                                 (nset-difference imported
+                                                  (list* current-package
+                                                         used-imports))
+                                 ;; We don't want to warn about symbols
+                                 ;; which were imported from some package
+                                 ;; and exported from the current-package:
+                                 packages-of-exported-symbols)
+                                primary-system-names
+                                :test #'string-equal
+                                :key (lambda (item)
+                                       (etypecase item
+                                         (string item)
+                                         (package (package-name item)))))))
                         (list missing-imports
                               unused-imports
                               not-imported-symbols)))))))
@@ -206,18 +289,32 @@
 
    - Warn on USE of packages with too large amount of external symbols.
    - Allow to turn off linter for some forms.
-   - Integrate with SBLINT and Emacs to highlight issues in the editor."
+   - Integrate with SBLINT and Emacs to highlight issues in the editor.
+
+   Returns integer with number of found problems or zero."
   (asdf:load-system system-name)
   
-  (flet ((format-missing-import (not-imported-symbols package)
+  (flet ((format-missing-import (not-imported-symbols package-or-system)
            (let ((*package* (find-package "KEYWORD"))
-                 (*print-case* :downcase))
-             (format nil "~A (~{~S~^, ~})"
-                     (downcased-package-name package)
-                     (gethash package not-imported-symbols)))))
-    (loop with error-count = 0
+                 (*print-case* :downcase)
+                 (symbols (gethash package-or-system not-imported-symbols))
+                 (name (etypecase package-or-system
+                         (package (downcased-package-name package-or-system))
+                         (asdf:system (asdf:component-name package-or-system)))))
+             
+             (if symbols
+                 (format nil "~A (~{~S~^, ~})"
+                         name
+                         symbols)
+                 (format nil "~A (for proper loading from Quicklisp)"
+                         name)))))
+    (loop with system = (asdf:registered-system system-name)
+          with system-dependencies = (asdf:system-depends-on system)
+          with num-problems = 0
           for filename in (system-files system-name)
-          for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports filename)
+          for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports system-name
+                                                                                            filename
+                                                                                            system-dependencies)
           when (or missing-imports
                    (and unused-imports
                         (not allow-unused-imports)))
@@ -229,13 +326,14 @@
                            0
                            (length unused-imports))))
           when missing-imports
-          do (format t "  Missing imports: ~{~A~^, ~}~%"
-                     (mapcar (curry #'format-missing-import
-                                    not-imported-symbols)
-                             missing-imports))
-          when (and unused-imports
-                    (not allow-unused-imports))
-          do (format t "  Unused imports: ~{~A~^, ~}~%"
-                     (mapcar #'downcased-package-name
-                             unused-imports))
-          finally (return error-count))))
+            do (format t "  Missing imports: ~{~A~^, ~}~%"
+                       (mapcar (curry #'format-missing-import
+                                      not-imported-symbols)
+                               missing-imports))
+               (incf num-problems (length missing-imports))
+          when unused-imports
+            do (format t "  Unused imports: ~{~A~^, ~}~%"
+                       (mapcar #'downcased-package-name
+                               unused-imports))
+               (incf num-problems (length unused-imports))
+          finally (return num-problems))))

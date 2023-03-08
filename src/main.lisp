@@ -9,6 +9,8 @@
   (:import-from #:sblint/utilities/pathname)
   (:import-from #:sblint/utilities/logger)
   (:import-from #:sblint/utilities/streams)
+  (:import-from #:40ants-linter/imports
+                #:analyze-imports)
   (:export #:main))
 (in-package 40ants-linter/main)
 
@@ -22,7 +24,12 @@
 
 
 (defun run-lint-system (system-name &optional (stream *standard-output*))
-  (let* ((system (asdf:find-system system-name))
+  (if (find-package :quicklisp)
+      (uiop:symbol-call :ql :quickload system-name
+                            :silent t)
+      (asdf:load-system system-name))
+  
+  (let* ((system (asdf:registered-system system-name))
          ;; Here we'll count errors.
          ;; We need it because run-lit-fn may signal error
          ;; and without error-map we'll never know how many
@@ -124,7 +131,7 @@
       )))
 
 
-(defun real-main (version system)
+(defun real-main (version system &key check-imports)
   "This function is for convenients, because it can be called in the repl
    without quit."
   (when version
@@ -141,7 +148,10 @@
       (loop for system in systems
             for errors-count = (progn
                                  (format t "Linting system ~A...~%" system)
-                                 (let ((errors-count (run-lint-system system)))
+                                 (let ((errors-count (+ (run-lint-system system)
+                                                        (if check-imports
+                                                            (analyze-imports system)
+                                                            0))))
                                    (if (zerop errors-count)
                                        (format t "everything is OK!~%")
                                        (format t "~%"))
@@ -152,6 +162,8 @@
 
 (defmain (main) ((version "Show program version and exit."
                           :flag t)
+                 (imports "Check for missing or unused imports of package-inferred systems."
+                          :flag t)
                  (system "ASDF system (or multiple systems, separated by comma)."))
   "Show information about Lisp implementation and given systems. Useful when collecting information for bugreports."
-  (real-main version system))
+  (real-main version system :check-imports imports))
