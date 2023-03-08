@@ -41,6 +41,8 @@
                                    "HTTP"
                                    "TODO"
                                    "Unlicense"
+                                   "ASDF"
+                                   "SBLINT"
                                    "REPL"
                                    "GIT")
                     :external-docs ("https://40ants.com/ci/"))
