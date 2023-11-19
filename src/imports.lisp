@@ -60,14 +60,29 @@
           do (pushnew (symbol-name (car option-value))
                       result
                       :test #'string-equal)
-        finally (return (values
-                         ;; All packages, mentioned in :USE and :IMPORT-FROM
-                         (mapcar #'find-package
-                                 (sort result
-                                       #'string<))
-                         ;; The current package itself should be ignored
-                         ;; during the search of missing imports
-                         (find-package (second form))))))
+        finally (return (let ((sorted-results
+                                (sort result
+                                      #'string<))
+                              (current-package
+                                (find-package (second form))))
+                          (loop for package-name in sorted-results
+                                for package = (find-package package-name)
+                                if package
+                                collect package into imported-packages
+                                else collect package-name into not-found-packages
+                                finally (return
+                                          (values
+                                           ;; The current package itself should be ignored
+                                           ;; during the search of missing imports
+                                           current-package
+                                           ;; All packages, mentioned in :USE and :IMPORT-FROM
+                                           imported-packages
+                                           ;; These names are mentioned in :USE or :IMPORT-FROM
+                                           ;; but there is no such packages. This sometimes
+                                           ;; happens when you are trying to make a dependency
+                                           ;; on some package inferred system by it's primary system
+                                           ;; name, but it does not define such package.
+                                           not-found-packages)))))))
 
 
 (defun form-symbols (form)
@@ -170,7 +185,7 @@
   (let* ((all-forms (read-forms filename))
          (package-def (find-if #'package-definition-p
                                all-forms)))
-    (multiple-value-bind (imported current-package)
+    (multiple-value-bind (current-package imported not-found-packages)
         (imported-packages package-def)
       (loop with used-imports = nil
             with missing-imports = nil
@@ -236,12 +251,12 @@
                                              ;; name is already downloaded and available for compilation
                                              (string-equal name
                                                            (asdf:primary-system-name checked-system-name)))
-                                       do (pushnew
-                                           (or (asdf:registered-system name)
-                                               (asdf:registered-system (string-downcase name))
-                                               name)
-                                           results
-                                           :test #'equal)
+                                     do (pushnew
+                                         (or (asdf:registered-system name)
+                                             (asdf:registered-system (string-downcase name))
+                                             name)
+                                         results
+                                         :test #'equal)
                                      finally (return results)))
                              (missing-imports (append
                                                missing-primary-systems
@@ -271,7 +286,8 @@
                                          (package (package-name item)))))))
                         (list missing-imports
                               unused-imports
-                              not-imported-symbols)))))))
+                              not-imported-symbols
+                              not-found-packages)))))))
 
 
 (defun downcased-package-name (package)
@@ -312,25 +328,34 @@
           with system-dependencies = (asdf:system-depends-on system)
           with num-problems = 0
           for filename in (system-files system-name)
-          for (missing-imports unused-imports not-imported-symbols) = (analyze-file-imports system-name
-                                                                                            filename
-                                                                                            system-dependencies)
+          for (missing-imports
+               unused-imports
+               not-imported-symbols
+               not-found-packages) = (analyze-file-imports system-name
+               filename
+               system-dependencies)
           when (or missing-imports
+                   not-found-packages
                    (and unused-imports
                         (not allow-unused-imports)))
           do (format t "~2&~A:~%"
                      filename)
              (incf num-problems
                    (+ (length missing-imports)
-                       (if allow-unused-imports
-                           0
-                           (length unused-imports))))
+                      (length not-found-packages)
+                      (if allow-unused-imports
+                          0
+                          (length unused-imports))))
           when missing-imports
             do (format t "  Missing imports: ~{~A~^, ~}~%"
                        (mapcar (curry #'format-missing-import
                                       not-imported-symbols)
                                missing-imports))
                (incf num-problems (length missing-imports))
+          when not-found-packages
+            do (format t "  Depends on missing packages: ~{~A~^, ~}~%"
+                       not-found-packages)
+               (incf num-problems (length not-found-packages))
           when unused-imports
             do (format t "  Unused imports: ~{~A~^, ~}~%"
                        (mapcar #'downcased-package-name
