@@ -9,5 +9,7 @@
                               "ASDF"
                               "REPL"
                               "HTTP"))
+  (0.2.0 2023-11-19
+         "* Now imports linter can warn on packages mentioned in defpackage but missing.")
   (0.1.0 2021-04-06
          "* Initial version."))
