@@ -92,6 +92,12 @@
              (form-symbols (cdr form))))
     (symbol
      (list form))
+    #+sbcl
+    (sb-impl::comma
+     (alexandria:mappend
+      #'form-symbols
+      (uiop:ensure-list
+       (slot-value form 'sb-impl::expr))))
     (t
      nil)))
 

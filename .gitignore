@@ -4,3 +4,4 @@ docs/build/
 .#*
 .*.~undo-tree~
 .DS_Store
+*.fasl
