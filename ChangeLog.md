@@ -2,6 +2,12 @@
 
 # ChangeLog
 
+<a id="x-2840ANTS-LINTER-DOCS-2FCHANGELOG-3A-3A-7C0-2E4-2E0-7C-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
+
+## 0.4.0 (2024-12-14)
+
+* Now `DYNAMIC_SPACE_SIZE` env variable can be used to control amount of memory available to `SBCL`, by default it is `1Gb`.
+
 <a id="x-2840ANTS-LINTER-DOCS-2FCHANGELOG-3A-3A-7C0-2E3-2E0-7C-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
 
 ## 0.3.0 (2023-12-01)
