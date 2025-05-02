@@ -55,8 +55,9 @@
                    (nunion result
                            (mapcar #'symbol-name option-value)
                            :test #'string-equal))
-        when (eql option-name
-                  :import-from)
+        when (member option-name
+                     '(:import-from
+                       :shadowing-import-from))
           do (pushnew (symbol-name (car option-value))
                       result
                       :test #'string-equal)
