@@ -12,6 +12,8 @@
 			      "1Gb"
                               "DYNAMIC_SPACE_SIZE"
                               "HTTP"))
+  (0.5.0 2025-05-02
+         "* Now imports linter recognizes :shadowing-import-from forms.")
   (0.4.0 2024-12-14
          "* Now `DYNAMIC_SPACE_SIZE` env variable can be used to control amount of memory available to SBCL, by default it is `1Gb`.")
   (0.3.0 2023-12-01
