@@ -155,11 +155,16 @@
     "40ants-linter"))
 
 
-(defun should-be-ignored (package)
+(defun package-should-be-ignored (package)
   (let* ((name (asdf:primary-system-name
                 (package-name package))))
-    (member name *packages-to-ignore*
-            :test #'string-equal)))
+    (or
+     ;; If there is no ASDF system corresponding to
+     ;; package name, then it should be ignored
+     (null (asdf:registered-system name))
+     ;; or package can be ignored by a blacklist:
+     (member name *packages-to-ignore*
+             :test #'string-equal))))
 
 
 (defun search-in-package (symbol package)
@@ -228,7 +233,7 @@
                           (union used-imports
                                  found-in-packages)))
                    ((and (not (eql package current-package))
-                         (not (should-be-ignored package)))
+                         (not (package-should-be-ignored package)))
                     (push symbol
                           (gethash package not-imported-symbols))
                     (pushnew (symbol-package symbol)

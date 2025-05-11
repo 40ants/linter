@@ -12,6 +12,8 @@
 			      "1Gb"
                               "DYNAMIC_SPACE_SIZE"
                               "HTTP"))
+  (0.6.0 2025-05-11
+         "* Now imports linter will ignore packages which are not correspond to ASDF system.")
   (0.5.0 2025-05-02
          "* Now imports linter recognizes :shadowing-import-from forms.")
   (0.4.0 2024-12-14
