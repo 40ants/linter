@@ -2,6 +2,12 @@
 
 # ChangeLog
 
+<a id="x-2840ANTS-LINTER-DOCS-2FCHANGELOG-3A-3A-7C0-2E6-2E0-7C-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
+
+## 0.6.0 (2025-05-11)
+
+* Now imports linter will ignore packages which are not correspond to `ASDF` system.
+
 <a id="x-2840ANTS-LINTER-DOCS-2FCHANGELOG-3A-3A-7C0-2E5-2E0-7C-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
 
 ## 0.5.0 (2025-05-02)
