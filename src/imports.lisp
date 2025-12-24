@@ -4,9 +4,21 @@
   (:import-from #:alexandria
                 #:curry
                 #:with-input-from-file)
+  (:import-from #:serapeum
+                #:soft-list-of
+                #:->)
   (:export
    #:analyze-imports))
 (in-package 40ants-linter/imports)
+
+
+(-> sort-pathnames ((soft-list-of pathname))
+    (values (soft-list-of pathname) &optional))
+
+(defun sort-pathnames (pathnames)
+  (sort (copy-list pathnames)
+        #'string<
+        :key #'namestring))
 
 
 (defun system-files (system-name &optional (visited (make-hash-table :test 'equal)))
@@ -33,9 +45,7 @@
                                 (system-files dep visited))
                               :test #'equal)))
       
-      (values (sort files
-                    #'string<
-                    :key #'namestring)))))
+      (sort-pathnames files))))
 
 
 (defun package-definition-p (form)
@@ -307,6 +317,66 @@
    (package-name package)))
 
 
+(-> get-package-name-from (list)
+    (values (or null string)))
+
+(defun get-package-name-from (form)
+  "Returns a downcased package name if the form is DEFPACKAGE or UIOP:DEFINE-PACKAGE macro."
+  (when (and (consp form)
+             (symbolp (car form))
+             (member (car form)
+                     '(defpackage uiop:define-package)))
+    (string-downcase (second form))))
+
+
+(-> get-file-package (pathname)
+    (values (or null string) &optional))
+
+(defun get-file-package (filename)
+  (loop for form in (uiop:with-safe-io-syntax ()
+                      (handler-case (uiop:read-file-forms filename)
+                        ;; Sometimes there might be other lisp files,
+                        ;; which belong to other system. For example,
+                        ;; Systems like 40ants-linter and 40ants-linter-ci
+                        ;; can share the same folder ./src/
+                        ;; And whe
+                        (serious-condition ()
+                          (return-from get-file-package nil))))
+        for package-name = (get-package-name-from form)
+        thereis package-name))
+
+
+(defun all-system-files (system)
+  (unless (typep system 'asdf:package-inferred-system)
+    (error "We can search for system files only for ASDF package inferred system, because they match to the file-system structure."))
+  (let* ((root-dir (asdf:component-pathname system))
+         (pathname-pattern (merge-pathnames (merge-pathnames
+                                             (make-pathname :name uiop:*wild*
+                                                            :type "lisp")
+                                             uiop:*wild-inferiors*)
+                                            root-dir))
+         (all-files (directory pathname-pattern))
+         (system-name (asdf:component-name system))
+         (prefix-to-search (str:ensure-suffix "/" system-name)))
+    (sort-pathnames
+     (remove-if-not (lambda (filename)
+                      (let ((file-package (get-file-package filename)))
+                        (when file-package
+                          (str:starts-with-p prefix-to-search
+                                             file-package))))
+                    all-files))))
+
+
+(-> make-relative-pathname (asdf:system pathname)
+    (values pathname &optional))
+
+(defun make-relative-pathname (asdf-system pathname)
+  "Returns a pathname relative to the directory where asdf-system definition is stored."
+  (let ((base-dir (asdf:system-source-directory asdf-system)))
+    (uiop:enough-pathname pathname
+                          base-dir)))
+
+
 (defun analyze-imports (system-name &key (allow-unused-imports nil))
   "Prints report about issues of IMPORT-FROM
    clauses in a given package-inferred ASDF system.
@@ -331,15 +401,19 @@
                          (asdf:system (asdf:component-name package-or-system)))))
              
              (if symbols
-                 (format nil "~A (~{~S~^, ~})"
-                         name
-                         symbols)
-                 (format nil "~A (for proper loading from Quicklisp)"
-                         name)))))
+               (format nil "~A (~{~S~^, ~})"
+                       name
+                       symbols)
+               (format nil "~A (for proper loading from Quicklisp)"
+                       name)))))
     (loop with system = (asdf:registered-system system-name)
           with system-dependencies = (asdf:system-depends-on system)
           with num-problems = 0
-          for filename in (system-files system-name)
+          with all-system-files = (all-system-files system)
+          with used-files = (system-files system-name)
+          for orphaned-files = (set-difference all-system-files used-files
+                                               :test #'uiop:pathname-equal)
+          for filename in used-files
           for (missing-imports
                unused-imports
                not-imported-symbols
@@ -350,12 +424,13 @@
                    not-found-packages
                    (and unused-imports
                         (not allow-unused-imports)))
-          do (format t "~2&~A:~%"
-                     filename)
-             (incf num-problems
-                   (+ (length missing-imports)
-                      (length not-found-packages)
-                      (if allow-unused-imports
+            do (format t "~2&~A:~%"
+                       filename)
+               (incf num-problems
+                     (+ (length missing-imports)
+                        (length not-found-packages)
+                        (length orphaned-files)
+                        (if allow-unused-imports
                           0
                           (length unused-imports))))
           when missing-imports
@@ -373,4 +448,15 @@
                        (mapcar #'downcased-package-name
                                unused-imports))
                (incf num-problems (length unused-imports))
-          finally (return num-problems))))
+          finally (return
+                    (progn
+                      (when orphaned-files
+                        (format t "These files are not used in the ASDF system.~%They either contain some old unwanted code or should be included in the ~A file:~%~{  - ~A~^~%~}~2%"
+                                (make-relative-pathname system
+                                                        (asdf:system-source-file system))
+                                (mapcar (curry #'make-relative-pathname system)
+                                        (sort-pathnames orphaned-files))))
+                    
+                      (incf num-problems (length unused-imports))
+                    
+                      num-problems)))))

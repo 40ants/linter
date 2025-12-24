@@ -12,6 +12,8 @@
 			      "1Gb"
                               "DYNAMIC_SPACE_SIZE"
                               "HTTP"))
+  (0.7.0 2025-12-24
+         "* A new feature was added to the imports linter. Now it will warn you if you forgot to include some files into the ASDF system definition. For now it works only for package-inferred ASDF systems.")
   (0.6.0 2025-05-11
          "* Now imports linter will ignore packages which are not correspond to ASDF system.")
   (0.5.0 2025-05-02
