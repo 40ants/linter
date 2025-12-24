@@ -2,6 +2,12 @@
 
 # ChangeLog
 
+<a id="x-2840ANTS-LINTER-DOCS-2FCHANGELOG-3A-3A-7C0-2E7-2E0-7C-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
+
+## 0.7.0 (2025-12-24)
+
+* A new feature was added to the imports linter. Now it will warn you if you forgot to include some files into the `ASDF` system definition. For now it works only for package-inferred `ASDF` systems.
+
 <a id="x-2840ANTS-LINTER-DOCS-2FCHANGELOG-3A-3A-7C0-2E6-2E0-7C-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
 
 ## 0.6.0 (2025-05-11)

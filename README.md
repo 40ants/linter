@@ -12,7 +12,7 @@
 * Homepage: [https://40ants.com/linter/][e712]
 * Bug tracker: [https://github.com/40ants/linter/issues][5a6b]
 * Source control: [GIT][5fd6]
-* Depends on: [alexandria][8236], [cl-ppcre][49b9], [defmain][3266], [named-readtables][d0a9], [sblint][2af3], [str][ef7f]
+* Depends on: [alexandria][8236], [cl-ppcre][49b9], [defmain][3266], [named-readtables][d0a9], [sblint][2af3], [serapeum][c41d], [str][ef7f]
 
 [![](https://github-actions.40ants.com/40ants/linter/matrix.svg?only=ci.run-tests)][9817]
 
@@ -63,6 +63,7 @@ Utility's exit code contains a number of found problems. Thus when it exits with
 [3266]: https://quickdocs.org/defmain
 [d0a9]: https://quickdocs.org/named-readtables
 [2af3]: https://quickdocs.org/sblint
+[c41d]: https://quickdocs.org/serapeum
 [ef7f]: https://quickdocs.org/str
 
 * * *
