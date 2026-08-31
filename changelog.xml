@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<rss version="2.0">
+    <channel>
+        <title>40ants-linter-docs ChangeLog</title>
+        <link>https://40ants.com/linter/</link>
+        <generator>xml-emitter</generator>
+        <language>en-us</language>
+        <item>
+            <title>0.7.0  (2025-12-24)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;A new feature was added to the imports linter. Now it will warn you if you forgot to include some files into the &lt;code&gt;ASDF&lt;/code&gt; system definition. For now it works only for package-inferred &lt;code&gt;ASDF&lt;/code&gt; systems.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Wed, 24 Dec 2025 00:00:00 +0000</pubDate>
+        </item>
+        <item>
+            <title>0.6.0  (2025-05-11)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;Now imports linter will ignore packages which are not correspond to &lt;code&gt;ASDF&lt;/code&gt; system.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Sun, 11 May 2025 00:00:00 +0000</pubDate>
+        </item>
+        <item>
+            <title>0.5.0  (2025-05-02)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;Now imports linter recognizes :shadowing-import-from forms.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Fri, 02 May 2025 00:00:00 +0000</pubDate>
+        </item>
+        <item>
+            <title>0.4.0  (2024-12-14)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;Now &lt;code&gt;DYNAMIC_SPACE_SIZE&lt;/code&gt; env variable can be used to control amount of memory available to &lt;code&gt;SBCL&lt;/code&gt;, by default it is &lt;code&gt;1Gb&lt;/code&gt;.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Sat, 14 Dec 2024 00:00:00 +0000</pubDate>
+        </item>
+        <item>
+            <title>0.3.0  (2023-12-01)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;Fixed issue when package was mentioned as unused whereas it was used inside a backquoted part of the macro.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Fri, 01 Dec 2023 00:00:00 +0000</pubDate>
+        </item>
+        <item>
+            <title>0.2.0  (2023-11-19)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;Now imports linter can warn on packages mentioned in defpackage but missing.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Sun, 19 Nov 2023 00:00:00 +0000</pubDate>
+        </item>
+        <item>
+            <title>0.1.0  (2021-04-06)</title>
+            <description>&lt;ul&gt;&lt;li&gt;&lt;p&gt;Initial version.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;</description>
+            <pubDate>Tue, 06 Apr 2021 00:00:00 +0000</pubDate>
+        </item>
+    </channel>
+</rss>
